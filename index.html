@@ -1,0 +1,632 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0"
+  >
+
+  <title>Interactive Text Effect</title>
+
+  <style>
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+
+    body {
+      min-height: 100vh;
+
+      display: flex;
+      align-items: center;
+      justify-content: center;
+
+      background: #f8f9fa;
+
+      font-family:
+        -apple-system,
+        BlinkMacSystemFont,
+        "Segoe UI",
+        Roboto,
+        Helvetica,
+        Arial,
+        sans-serif;
+
+      overflow-x: hidden;
+    }
+
+
+    /*
+      MAIN TEXT
+    */
+
+    .hero-title {
+      width: 100%;
+
+      text-align: center;
+
+      font-size: clamp(
+        3rem,
+        7.2vw,
+        6.5rem
+      );
+
+      /*
+        Very bold
+      */
+
+      font-weight: 1500;
+
+      /*
+        Three fixed lines
+      */
+
+      line-height: 1.92;
+
+      letter-spacing: -3px;
+
+      color: #111111;
+
+      user-select: none;
+
+      touch-action: pan-y;
+    }
+
+
+    /*
+      Each character
+    */
+
+    .char {
+      display: inline-block;
+
+      transform-origin: bottom center;
+
+      /*
+        Color returns smoothly
+        without becoming dull.
+      */
+
+      transition:
+        color 0.42s
+        cubic-bezier(
+          0.22,
+          1,
+          0.36,
+          1
+        );
+
+      cursor: pointer;
+
+      will-change:
+        transform,
+        color;
+    }
+
+
+    /*
+      Exact same movement
+      for every letter.
+    */
+
+    @keyframes smoothWobble {
+
+      0% {
+        transform:
+          rotate(0deg)
+          scale(1);
+      }
+
+      25% {
+        transform:
+          rotate(-7deg)
+          scale(1.06);
+      }
+
+      50% {
+        transform:
+          rotate(6deg)
+          scale(1.045);
+      }
+
+      75% {
+        transform:
+          rotate(-3deg)
+          scale(1.02);
+      }
+
+      100% {
+        transform:
+          rotate(0deg)
+          scale(1);
+      }
+
+    }
+
+
+    .char.active {
+      animation:
+        smoothWobble
+        0.65s
+        cubic-bezier(
+          0.22,
+          1,
+          0.36,
+          1
+        )
+        forwards;
+    }
+
+
+    /*
+      MOBILE
+
+      Keep the same 3-line layout,
+      but scale the text to fit.
+    */
+
+    @media (max-width: 700px) {
+
+      .hero-title {
+        width: 100%;
+
+        padding-inline: 12px;
+
+        font-size: clamp(
+          2.35rem,
+          12vw,
+          5rem
+        );
+
+        font-weight: 900;
+
+        line-height: 0.95;
+
+        letter-spacing: -2px;
+      }
+
+    }
+
+
+    /*
+      Very small phones
+    */
+
+    @media (max-width: 380px) {
+
+      .hero-title {
+        font-size: 2.15rem;
+
+        letter-spacing: -1.5px;
+      }
+
+    }
+
+  </style>
+</head>
+
+
+<body>
+
+
+  <!--
+    EXACTLY THREE LINES
+  -->
+
+  <h1
+    class="hero-title"
+    id="textTarget"
+  >
+    The Super Fast<br>
+    Color palette<br>
+    Generator!
+  </h1>
+
+
+  <script>
+
+    const titleElement =
+      document.getElementById(
+        "textTarget"
+      );
+
+
+    /*
+      Bright colors only.
+    */
+
+    const brightColors = [
+
+      "#FF1744",
+      "#00E676",
+      "#FF9100",
+      "#00B0FF",
+      "#D500F9",
+      "#FFEA00",
+      "#00E5FF",
+      "#FF3D00",
+      "#76FF03",
+      "#FF00AA",
+      "#2979FF",
+      "#00FFB3"
+
+    ];
+
+
+    /*
+      Preserve the three lines
+      while splitting characters.
+    */
+
+    const lines = [
+
+      "The Super Fast",
+      "Color palette",
+      "Generator!"
+
+    ];
+
+
+    /*
+      Build each line separately.
+      This prevents <br> from
+      getting destroyed by JS.
+    */
+
+    titleElement.innerHTML =
+      lines
+        .map(line => {
+
+          return `
+            <span class="line">
+              ${line
+                .split("")
+                .map(char => {
+
+                  return `
+                    <span class="char">
+                      ${
+                        char === " "
+                          ? "&nbsp;"
+                          : char
+                      }
+                    </span>
+                  `;
+
+                })
+                .join("")
+              }
+            </span>
+            <br>
+          `;
+
+        })
+        .join("");
+
+
+    /*
+      Remove the final unnecessary <br>
+      effect visually by keeping it harmless.
+    */
+
+
+    const charSpans =
+      document.querySelectorAll(
+        ".char"
+      );
+
+
+    /*
+      Latest 3 colored letters.
+    */
+
+    const recentLetters = [];
+
+    const MAX_RECENT = 32;
+
+
+    /*
+      Color remains for 2.5 seconds
+      after the last interaction.
+    */
+
+    const COLOR_DELAY = 1700;
+
+
+    /*
+      Separate timer for every letter.
+    */
+
+    const fadeTimers =
+      new WeakMap();
+
+
+    /*
+      Activate a letter.
+    */
+
+    function activateLetter(
+      span
+    ) {
+
+      const existingIndex =
+        recentLetters.indexOf(
+          span
+        );
+
+
+      /*
+        If already colored,
+        restart its 2.5 second timer.
+      */
+
+      if (
+        existingIndex !== -1
+      ) {
+
+        clearTimeout(
+          fadeTimers.get(span)
+        );
+
+
+        recentLetters.splice(
+          existingIndex,
+          1
+        );
+
+
+        recentLetters.push(
+          span
+        );
+
+
+        scheduleColorReturn(
+          span
+        );
+
+        return;
+      }
+
+
+      /*
+        Pick a bright color.
+      */
+
+      const randomColor =
+        brightColors[
+          Math.floor(
+            Math.random() *
+            brightColors.length
+          )
+        ];
+
+
+      recentLetters.push(
+        span
+      );
+
+
+      /*
+        Only the latest 3 letters
+        stay colored.
+      */
+
+      while (
+        recentLetters.length >
+        MAX_RECENT
+      ) {
+
+        const oldest =
+          recentLetters.shift();
+
+
+        clearTimeout(
+          fadeTimers.get(
+            oldest
+          )
+        );
+
+
+        oldest.style.color =
+          "#111111";
+      }
+
+
+      /*
+        Restart wobble.
+      */
+
+      span.classList.remove(
+        "active"
+      );
+
+
+      void span.offsetWidth;
+
+
+      span.classList.add(
+        "active"
+      );
+
+
+      /*
+        Bright color.
+      */
+
+      span.style.color =
+        randomColor;
+
+
+      /*
+        Start 2.5 second timer.
+      */
+
+      scheduleColorReturn(
+        span
+      );
+
+    }
+
+
+    /*
+      Return letter to black
+      after 2.5 seconds.
+    */
+
+    function scheduleColorReturn(
+      span
+    ) {
+
+      clearTimeout(
+        fadeTimers.get(span)
+      );
+
+
+      const timer =
+        setTimeout(
+          () => {
+
+            span.style.color =
+              "#111111";
+
+
+            const index =
+              recentLetters.indexOf(
+                span
+              );
+
+
+            if (
+              index !== -1
+            ) {
+
+              recentLetters.splice(
+                index,
+                1
+              );
+
+            }
+
+          },
+          COLOR_DELAY
+        );
+
+
+      fadeTimers.set(
+        span,
+        timer
+      );
+
+    }
+
+
+    /*
+      DESKTOP
+      Mouse movement.
+    */
+
+    charSpans.forEach(
+      span => {
+
+        span.addEventListener(
+          "mouseenter",
+          () => {
+
+            activateLetter(
+              span
+            );
+
+          }
+        );
+
+      }
+    );
+
+
+    /*
+      MOBILE
+      Finger sliding.
+    */
+
+    let lastTouchedLetter =
+      null;
+
+
+    titleElement.addEventListener(
+      "touchmove",
+      event => {
+
+        const touch =
+          event.touches[0];
+
+
+        const element =
+          document.elementFromPoint(
+            touch.clientX,
+            touch.clientY
+          );
+
+
+        if (
+          element &&
+          element.classList.contains(
+            "char"
+          ) &&
+          element !==
+            lastTouchedLetter
+        ) {
+
+          activateLetter(
+            element
+          );
+
+
+          lastTouchedLetter =
+            element;
+
+        }
+
+      },
+      {
+        passive: true
+      }
+    );
+
+
+    /*
+      Finger leaves.
+
+      Colors DON'T disappear here.
+      Each letter keeps its own
+      2.5 second timer.
+    */
+
+    titleElement.addEventListener(
+      "touchend",
+      () => {
+
+        lastTouchedLetter =
+          null;
+
+      }
+    );
+
+
+    titleElement.addEventListener(
+      "touchcancel",
+      () => {
+
+        lastTouchedLetter =
+          null;
+
+      }
+    );
+
+  </script>
+
+</body>
+  </html>
